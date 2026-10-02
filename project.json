@@ -1,0 +1,21 @@
+{
+  "id": 12,
+  "title": "Smart Entryway Mobile Alerts",
+  "repository_slug": "smart-entryway-mobile-alerts",
+  "category": "Smart Home",
+  "platform": "ESP8266",
+  "platform_family": "arduino",
+  "difficulty": "Intermediate",
+  "estimated_hours": 28,
+  "connectivity": "Matter",
+  "components": [
+    "relay module",
+    "servo motor",
+    "microphone module"
+  ],
+  "scope": "Build a smart home prototype that uses relay module, servo motor, microphone module to send timely mobile notifications. Include setup instructions, a circuit diagram, tested firmware, and sample output.",
+  "key_deliverable": "Mobile Alerts demonstration with repeatable test steps",
+  "mode": "threshold_alert",
+  "entrypoint": "firmware/smart-entryway-mobile-alerts/smart-entryway-mobile-alerts.ino",
+  "roadmap_source": "openmaker-2100-project-roadmap.xlsx"
+}
