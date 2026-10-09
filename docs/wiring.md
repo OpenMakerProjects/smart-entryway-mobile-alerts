@@ -1,17 +1,2 @@
-# Wiring guide
-
-This is a low-voltage prototype wiring plan for **Smart Entryway Mobile Alerts**. Confirm every module's datasheet because breakout-board pinouts vary.
-
-| Component | Suggested pin | Role | Check |
-| --- | --- | --- | --- |
-| relay module | 5 | Digital I/O | Confirm the module voltage and pinout before power-up. |
-| servo motor | 6 | Digital I/O | Confirm the module voltage and pinout before power-up. |
-| microphone module | A2 | Analog input | Confirm the module voltage and pinout before power-up. |
-| Status output | LED_BUILTIN | Output | Use a resistor when an external LED is fitted. |
-
-## Power
-
-- Use a regulated supply sized for the selected modules.
-- Join grounds unless an interface is explicitly isolated.
-- Do not connect mains voltage directly to a development board.
-- Add a fuse, emergency stop, and certified isolation where a real actuator can create risk.
+# Wiring
+Use NodeMCU v2 divided A0 (board≤3.3V): micVCC3V3, OUTA0, GNDcommon. GPIO5/D1→active-high relayIN with10k pulldown toGND; choose3.3V-compatible IN and5Vcoil module. GPIO4/D2→servo signal. Servo red and relayVCC→external regulated5V; grounds common withNodeMCU. Add470µF acrossservo supply. Fused1A external5V→relayCOM; NO→5VLEDlamp positive; lampnegativeGND; NCunused. NodeMCU USBpower, no5Vinto3V3. Connectunpowered, groundsfirst, inspectpolarity. Servo onlyloosepointerarm. [Editable diagram](circuit-diagram.svg).

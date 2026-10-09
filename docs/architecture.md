@@ -1,9 +1,2 @@
 # Architecture
-
-```text
-Sensors -> validation and filtering -> threshold alert -> output/alert
-                                      |
-                                      +-> Matter telemetry and logs
-```
-
-The implementation separates acquisition, decision logic, output handling, and telemetry. Hardware-specific access is kept at the edge so the core behavior can be tested with simulated readings.
+Microphone64-sample peak-to-peak event detector, two consecutive100ms loud readings and10s cooldown. Serial events work offline; MQTT non-retained events feed HA mobile notification. Optional explicitlyarmed outputs energize5s, failoffinvalid/offline; servo0/90 andrelayLOW/HIGH. HA MQTT armedswitch is optionalMatter export viaMatterbridge-hass. ESP8266 hasno nativeMatter. SharedC++policy hosttested.

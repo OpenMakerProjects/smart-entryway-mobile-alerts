@@ -1,0 +1,23 @@
+mqtt:
+  switch:
+    - name: Entryway Alerts Armed
+      unique_id: entryway12_armed
+      command_topic: entry12/command
+      payload_on: ARM
+      payload_off: STOP
+      state_topic: entry12/state
+      value_template: "{{ 'ARM' if value_json.armed else 'STOP' }}"
+      availability_topic: entry12/availability
+automation:
+  - alias: Entryway12 mobile sound alert
+    id: entryway12_mobile_sound
+    triggers:
+      - trigger: mqtt
+        topic: entry12/event
+    actions:
+      - action: notify.mobile_app_replace_with_your_phone
+        data:
+          title: Entryway sound
+          message: "Microphone event {{ trigger.payload_json.seq }}, peak-to-peak {{ trigger.payload_json.sound_pp }} ADC counts. This does not prove entry."
+    mode: queued
+    max: 5
