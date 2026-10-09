@@ -1,107 +1,34 @@
 #include <Arduino.h>
-
-#ifndef LED_BUILTIN
-#define LED_BUILTIN 2
-#endif
-
-// Smart Entryway Mobile Alerts
-// Roadmap project 12; mode: threshold_alert
-constexpr uint8_t SENSOR_PINS[] = {A0, A1, A2};
-constexpr size_t SENSOR_COUNT = sizeof(SENSOR_PINS) / sizeof(SENSOR_PINS[0]);
-constexpr uint8_t OUTPUT_PIN = LED_BUILTIN;
-constexpr unsigned long SAMPLE_INTERVAL_MS = 750UL;
-constexpr float TRIGGER_THRESHOLD = 0.57f;
-constexpr uint8_t REQUIRED_CONFIRMATIONS = 2;
-
-enum class SystemState : uint8_t { Starting, Normal, Active, Fault };
-
-struct Snapshot {
-  float values[SENSOR_COUNT];
-  float score;
-  bool valid;
-};
-
-SystemState state = SystemState::Starting;
-unsigned long lastSampleAt = 0;
-uint8_t confirmations = 0;
-bool outputActive = false;
-
-float normalizeReading(int raw) {
-  return constrain(raw / 1023.0f, 0.0f, 1.0f);
+#include <ESP8266WiFi.h>
+#include <PubSubClient.h>
+#include <Servo.h>
+#include "../alerts.h"
+#include "../config.h"
+WiFiClient wifi;PubSubClient mqtt(wifi);Servo pointer;Alerts policy;
+uint32_t sampled=0,reported=0,retry=0,seq=0;bool lastValid=false;
+void command(char*,byte* bytes,unsigned length){
+ if(length==3&&!memcmp(bytes,"ARM",3)&&lastValid&&mqtt.connected())policy.armed=true;
+ if(length==4&&!memcmp(bytes,"STOP",4))policy.stop();
 }
-
-Snapshot acquireSnapshot() {
-  Snapshot snapshot{};
-  snapshot.valid = true;
-  float sum = 0.0f;
-  for (size_t index = 0; index < SENSOR_COUNT; ++index) {
-    const int raw = analogRead(SENSOR_PINS[index]);
-    if (raw < 0) snapshot.valid = false;
-    snapshot.values[index] = normalizeReading(raw);
-    sum += snapshot.values[index];
+void setup(){
+ pinMode(5,OUTPUT);digitalWrite(5,LOW);pointer.attach(4);pointer.write(0);Serial.begin(115200);
+ mqtt.setServer(MQTT_HOST,MQTT_PORT);mqtt.setCallback(command);mqtt.setSocketTimeout(1);
+ if(strlen(WIFI_SSID)){WiFi.mode(WIFI_STA);WiFi.begin(WIFI_SSID,WIFI_PASSWORD);}
+}
+void loop(){
+ uint32_t now=millis();
+ if(strlen(MQTT_HOST)&&WiFi.status()==WL_CONNECTED&&!mqtt.connected()&&uint32_t(now-retry)>=10000){
+  retry=now;String client="entry12-"+String(ESP.getChipId(),HEX);
+  if(mqtt.connect(client.c_str(),MQTT_USER,MQTT_PASSWORD,"entry12/availability",0,true,"offline")){
+   mqtt.publish("entry12/availability","online",true);mqtt.subscribe("entry12/command");
   }
-  snapshot.score = sum / SENSOR_COUNT;
-  return snapshot;
-}
-
-bool decide(const Snapshot &snapshot) {
-  if (!snapshot.valid) return false;
-  const bool condition = snapshot.score >= TRIGGER_THRESHOLD;
-  if (!condition) {
-    confirmations = 0;
-  } else if (confirmations < REQUIRED_CONFIRMATIONS) {
-    confirmations += 1;
-  }
-  return confirmations >= REQUIRED_CONFIRMATIONS;
-}
-
-void applyOutput(bool requested, bool valid) {
-  if (!valid) {
-    outputActive = false;
-    state = SystemState::Fault;
-  } else {
-    outputActive = requested;
-    state = requested ? SystemState::Active : SystemState::Normal;
-  }
-  digitalWrite(OUTPUT_PIN, outputActive ? HIGH : LOW);
-}
-
-const char *stateName() {
-  switch (state) {
-    case SystemState::Starting: return "starting";
-    case SystemState::Normal: return "normal";
-    case SystemState::Active: return "active";
-    default: return "fault";
-  }
-}
-
-void publishTelemetry(const Snapshot &snapshot) {
-  Serial.print(R"json({"project_id":12,"mode":"threshold_alert","state":")json");
-  Serial.print(stateName());
-  Serial.print(R"json(","score":)json");
-  Serial.print(snapshot.score, 3);
-  Serial.print(R"json(,"output":)json");
-  Serial.print(outputActive ? "true" : "false");
-  Serial.print(R"json(,"values":[)json");
-  for (size_t index = 0; index < SENSOR_COUNT; ++index) {
-    if (index) Serial.print(',');
-    Serial.print(snapshot.values[index], 3);
-  }
-  Serial.println("]}");
-}
-
-void setup() {
-  pinMode(OUTPUT_PIN, OUTPUT);
-  digitalWrite(OUTPUT_PIN, LOW);
-  Serial.begin(115200);
-  state = SystemState::Normal;
-}
-
-void loop() {
-  const unsigned long now = millis();
-  if (now - lastSampleAt < SAMPLE_INTERVAL_MS) return;
-  lastSampleAt = now;
-  const Snapshot snapshot = acquireSnapshot();
-  applyOutput(decide(snapshot), snapshot.valid);
-  publishTelemetry(snapshot);
+ }
+ mqtt.loop();
+ if(uint32_t(now-sampled)<100){delay(1);return;}sampled=now;
+ int lo=1023,hi=0;bool valid=now>=2000;
+ for(int i=0;i<64;i++){int v=analogRead(A0);lo=min(lo,v);hi=max(hi,v);if(v<2||v>1021)valid=false;delayMicroseconds(100);}
+ lastValid=valid;bool event=policy.tick(now,valid,hi-lo>=180,mqtt.connected());
+ digitalWrite(5,policy.active?HIGH:LOW);pointer.write(policy.active?90:0);
+ if(event){char e[100];snprintf(e,sizeof(e),"{\"id\":12,\"seq\":%lu,\"sound_pp\":%d}",(unsigned long)++seq,hi-lo);Serial.println(e);if(mqtt.connected())mqtt.publish("entry12/event",e,false);}
+ if(uint32_t(now-reported)>=1000){reported=now;char s[160];snprintf(s,sizeof(s),"{\"id\":12,\"sound_pp\":%d,\"valid\":%s,\"armed\":%s,\"relay\":%s,\"servo_deg\":%d}",hi-lo,valid?"true":"false",policy.armed?"true":"false",policy.active?"true":"false",policy.active?90:0);Serial.println(s);if(mqtt.connected())mqtt.publish("entry12/state",s,true);}
 }
